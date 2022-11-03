@@ -1,10 +1,33 @@
 # OnePassword python client
-[![PyPi release](https://github.com/wandera/1password-client/actions/workflows/publish-to-pypi.yml/badge.svg?branch=main&event=push)](https://github.com/wandera/1password-client/actions/workflows/publish-to-pypi.yml)
-[![CodeQL](https://github.com/wandera/1password-client/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/wandera/1password-client/actions/workflows/codeql-analysis.yml)
+[![PyPi release](https://github.com/smurfless1/1password-client/actions/workflows/publish-to-pypi.yml/badge.svg?branch=main&event=push)](https://github.com/wandera/1password-client/actions/workflows/publish-to-pypi.yml)
+[![CodeQL](https://github.com/smurfless1/1password-client/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/wandera/1password-client/actions/workflows/codeql-analysis.yml)
 
 Python client around the 1Password password manager cli for usage within python code and
-Jupyter Notebooks. Developed by Data Scientists from Wandera (a Jamf company).
+Jupyter Notebooks. Originally developed by Data Scientists from Wandera (a Jamf company).
 
+This fork is rewritten over the 1password CLI version 2.
+
+To test initial setup (including caching an encrypted copy of your master password so later scripts do not stop to ask)
+run the following:
+
+`python -m onepassword`
+
+Returning users
+
+There were some big changes. This library no longer tries to install the binary 1password CLI for you.
+This limits the responsibility of this package, whose main purpose is to translate between 1password CLI and python.
+The amount of fiddling around with security settings in the OS and 1password itself just made it unsuited to this 
+kind of integration. Use homebrew or puppet or something else if managing at scale.
+
+The wrapper around CLI v1.x tried to maintain the shell environment, so you could also hop in and out of new shells.
+
+That's over now.
+
+My reasoning is this: Under no circumstances do I expect a password client to edit my .zshrc. I feel this is too risky.
+Instead, this will maintain a separate session variable, which probably invalidates the one from your current shell 
+sessions. This seems like the right thing to do. 
+
+If you don't like it, feel free to fork and go back to the old risky method.
 
 ## Installation
 ```bash
@@ -16,16 +39,8 @@ If you have issues with PyYaml or other distutils installed packages then use:
 pip install --ignore-installed 1password
 ```
 
-You are welcome to install and manage `op` yourself by visiting 
+You must manage `op` yourself by visiting 
 https://support.1password.com/command-line-getting-started/
-
-The above commands will check `op` is present already and if not will install the best `op` cli it can work out plus 
-the python client itself. 
-This is currently fixed at `op` version 1.10.3 to ensure compatibility. If you wish to use a higher version of `op` you
-can by running `op update` in a terminal however note that we cannot ensure it will work with our client yet. 
-
-Mac OS users will be prompted with a seperate installation windows to ensure you have a signed version of `op` - make
-sure to check other desktops that the installer might pop up on. 
 
 ### Optional pre-requisites
 #### base32
@@ -37,14 +52,14 @@ If you really want to, you can make sure you have this installed by installing c
 be found here: https://command-not-found.com/base32
 
 ## Basic Usage
-Currently tested on Mac OS and Linux.
+Currently tested on macOS and Linux.
 
 On first usage users will be asked for both the enrolled email, secret key and password. 
 There is also verification of your account domain and name. 
 
 For all following usages you will only be asked for a password.
 
-You will be given 3 attempts and then pointed to reset password documentation or alternatively you can
+You will be given 3 attempts and then pointed to reset password documentation, or alternatively you can
 restart your kernel.
 
 No passwords are stored in memory without encryption.
@@ -53,20 +68,20 @@ If you have 2FA turned on for your 1Password account the client will ask for you
 
 ```python
 from onepassword import OnePassword
-import json
+from typing import Dict, List
 
 op = OnePassword()
 
 # List all vaults 
-json.loads(op.list_vaults())
+vaults: List[str] = op.list_vaults()
 
 # List all items in a vault, default is Private
-op.list_items()
+all_items_in_vault: Dict = op.list_items()
 
 # Get all fields, one field or more fields for an item with uuid="example"
-op.get_item(uuid="example")
-op.get_item(uuid="example", fields="username")
-op.get_item(uuid="example", fields=["username", "password"])
+op.get_item_fields(uuid="example")
+op.get_item_fields(uuid="example", fields="username")
+op.get_item_fields(uuid="example", fields=["username", "password"])
 
 ```
 

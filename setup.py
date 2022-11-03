@@ -1,33 +1,17 @@
-import os
+from pathlib import Path
 from setuptools import setup
-from setuptools.command.develop import develop
-from setuptools.command.install import install
 
 
-class PostDevelopCommand(develop):
-    """Post-installation for development mode."""
-    def run(self):
-        develop.run(self)
-        from install_op import install_op
-        install_op()
-
-
-class PostInstallCommand(install):
-    """Post-installation for installation mode."""
-    def run(self):
-        install.run(self)
-        from install_op import install_op
-        install_op()
+root_dir = Path(__file__).parent
 
 
 def readme():
-    with open('README.md') as f:
+    with (root_dir / 'README.md').open('r', encoding='utf-8') as f:
         return f.read()
 
 
-root_dir = os.getcwd()
-with open(os.path.join(root_dir, 'VERSION')) as version_file:
-    version = version_file.read().strip()
+with (root_dir / 'VERSION').open('r', encoding='utf-8') as version_handle:
+    version = version_handle.read().strip()
 
 
 setup(
@@ -53,11 +37,6 @@ setup(
                  "Operating System :: POSIX",
                  "Operating System :: Unix"],
     packages=["onepassword"],
-    tests_require=["nose", "mock", "pytest"],
-    test_suite="nose.collector",
-    cmdclass={
-        'develop': PostDevelopCommand,
-        'install': PostInstallCommand,
-    },
+    tests_require=["pytest"],
     setup_requires=["wget"]
 )
