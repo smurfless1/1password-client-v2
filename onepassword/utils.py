@@ -39,29 +39,33 @@ def _spawn_signin(command, m_password: bytes) -> str:
     if command == "":
         raise IOError("Spawn command not valid")
     child = pexpect.spawn(command)
-    child.expect([master_password_regex, pexpect.EOF])
-    if child.isalive():
-        try:
-            child.sendline(m_password)
-        except OSError:
+    resp = child.expect([master_password_regex, pexpect.EOF])
+    if resp != 1:
+        if child.isalive():
+            try:
+                child.sendline(m_password)
+            except OSError:
+                child.close()
+                child = pexpect.spawn(command)
+                child.expect([master_password_regex, pexpect.EOF])
+                child.sendline(m_password)
+        else:
             child.close()
             child = pexpect.spawn(command)
-            child.expect([master_password_regex, pexpect.EOF])
-            child.sendline(m_password)
-    else:
-        child.close()
-        child = pexpect.spawn(command)
-        child.expect([master_password_regex, pexpect.EOF])
-        # todo possible error check here
-        child.sendline(m_password)
+            resp = child.expect([master_password_regex, pexpect.EOF])
+            if resp == 0:
+                child.sendline(m_password)
     resp = child.expect(['Enter your six-digit authentication code:', pexpect.EOF])
     if resp != 1:
         auth_code = str(input("Please input your 1Password six-digit authentication code: "))
         child.sendline(auth_code)
         child.expect(pexpect.EOF)
-    sess_key = get_session_key(child.before)
+    before = child.before
     child.close()
-    return sess_key
+    if before:
+        sess_key = get_session_key(child.before)
+        return sess_key
+    return ''
 
 
 def bump_version(version_type="patch"):

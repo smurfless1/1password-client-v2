@@ -1,6 +1,6 @@
 import unittest
 
-from onepassword import OnePassword
+from onepassword import OnePassword, OnePasswordCreds
 from onepassword.settings import Settings
 
 

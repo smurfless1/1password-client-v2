@@ -1,6 +1,7 @@
 import os
 import json
-from pathlib import Path
+import platform
+from dataclasses import dataclass
 from typing import Optional, List, Union, Any, Tuple, Dict
 
 import yaml
@@ -13,43 +14,54 @@ from onepassword.settings import Settings
 from onepassword.encrypted_string import EncryptedString
 
 
-MASTER_PW_CACHE = Path("~/.1password-client.pkl").expanduser()
-MASTER_PW_KEY = 'password'  # subtle. I like it.
+
+@dataclass
+class OnePasswordCreds:
+
+    # shorthand name for your 1password account e.g. wandera from wandera.1password.com (optional, default=None)
+    account: Optional[str] = None
+    # full domain name of 1password account e.g. wandera.1password.com (optional, default=None)
+    domain: Optional[str] = None
+    # email address of 1password account (optional, default=None)
+    email: Optional[str] = None
+    # secret_key: secret key of 1password account (optional, default=None)
+    secret: Optional[str] = None
+    # todo only store encrypted bytes instead?
+    # master_password: password for 1password account (optional, default=None)
+    password: Optional[str] = None
+    encrypted_password: Optional[bytes] = None
 
 
 class OnePassword:
     """ Class for integrating with a 1Password CLI password manager """
     def __init__(
             self,
-            account: str = None,
-            domain: str = None,
-            email: str = None,
-            secret: str = None,
-            password: str = None
+            creds: Optional[OnePasswordCreds] = OnePasswordCreds()
         ):  # pragma: no cover
         """
         Constructor.
 
-        :param domain: domain of 1password account (optional, default=None)
-        :param email: email address of 1password account (optional, default=None)
-        :param secret: secret key of 1password account (optional, default=None)
+        :param creds: creds
         """
-        self.signin_domain = domain
-        self.email_address = email
-        self.secret_key: str = secret
+        self.signin_domain = creds.domain
+        self.email_address = creds.email
+        self.secret_key: str = creds.secret
         self.encrypted_master_password: bytes = ''.encode('utf-8')
         bp = Settings()
         os.environ["OP_DEVICE"] = get_device_uuid(bp)
         # reuse existing op session
-        if isinstance(account, str) and "OP_SESSION_{}".format(account) in os.environ:
+        with bp.open() as settings:
+            if Settings.ACCOUNT_KEY in settings:
+                creds.account = settings.get(Settings.ACCOUNT_KEY)
+        if isinstance(creds.account, str) and "OP_SESSION_{}".format(creds.account) in settings:
             # reuse all existing values
             pass
         elif self.session_var_in_environment(bp):
             # just the password (if not cached)
-            self.encrypted_master_password, self.session_key = self.signin_wrapper(account=account, master_password=password)
+            self.encrypted_master_password, self.session_key = self.signin_wrapper(creds)
         else:
             # full first time setup
-            self.first_use()
+            self.first_use(creds=creds)
 
     @staticmethod
     def session_var_in_environment(bp):
@@ -61,77 +73,57 @@ class OnePassword:
                     found = True
         return found
 
-    def first_use(self):  # pragma: no cover
+    def first_use(
+        self,
+        creds: Optional[OnePasswordCreds] = OnePasswordCreds()
+    ):  # pragma: no cover
         """
         Helper function to perform first time signin either with user interaction or not, depending on _init_
         """
-        email_address = input("Please input your email address used for 1Password account: ")
-        account = domain_from_email(email_address)
-        signin_domain = account + ".1password.com"
-        confirm_signin_domain = input("Is your 1Password domain: {} (y/n)? ".format(signin_domain))
-        if confirm_signin_domain == "y":
-            pass
-        else:
-            signin_domain = input("Please input your 1Password domain in the format <something>.1password.com: ")
-
-        confirm_account = input("Is your 1Password account name: {} (y/n)? ".format(account))
-        if confirm_account == "y":
-            pass
-        else:
-            account = input("Please input your 1Password account name e.g. wandera from wandera.1password.com: ")
-        secret_key = getpass("Please input your 1Password secret key: ")
-        self.signin_wrapper(account, signin_domain, email_address, secret_key)
+        creds.email = creds.email or input("Please input your email address used for 1Password account: ")
+        creds.account = creds.account or domain_from_email(creds.email)
+        creds.domain = creds.domain or creds.account + ".1password.com"
+        creds.secret = creds.secret or getpass("Please input your 1Password secret key: ")
+        self.signin_wrapper(creds)
 
     def signin_wrapper(
         self,
-        account: str = None,
-        domain: str = None,
-        email: str = None,
-        secret_key: str = None,
-        master_password: Optional[str] = None
+        creds: OnePasswordCreds,
     ) -> Tuple[bytes, str]:
         # pragma: no cover
         """
         Helper function for user to sign in but allows for three incorrect passwords. If successful signs in and updates
         bash profile, if not raises exception and points user to 1Password support.
 
-        :param account: shorthand name for your 1password account e.g. wandera from wandera.1password.com (optional,
-        default=None)
-        :param domain: full domain name of 1password account e.g. wandera.1password.com (optional, default=None)
-        :param email: email address of 1password account (optional, default=None)
-        :param secret_key: secret key of 1password account (optional, default=None)
-        :param master_password: password for 1password account (optional, default=None)
+        :param creds: credentials
         :return: encrypted_str, session_key - used by signin to know of existing login
         """
 
-        password, session_key, domain, account, bp = self._signin(account, domain, email, secret_key, master_password)
+        password, session_key, domain, account, bp = \
+            self._signin(creds)
         tries = 1
         while tries < 3:
             if "(ERROR)  401" in session_key:
                 print("That's not the right password, try again.")
-                password, session_key, domain, account, bp = self._signin(account, domain, email, secret_key,
-                                                                          master_password)
+                password, session_key, domain, account, bp = self._signin(creds)
                 tries += 1
                 pass
             else:
                 # device_uuid = generate_uuid()
-                session_final_key = f"OP_SESSION_{account}"
+                session_final_key = f"OP_SESSION_{creds.account}"
                 session_final_value = session_key.replace("\n", "")
                 os.environ[session_final_key] = session_final_value
                 bp.update_profile(session_final_key, session_final_value)
-                encrypt = EncryptedString(session_key)
-                encrypted_pass_bytes = encrypt.encode(password)
+                key_value = session_key if bool(session_key) else str.encode(f"{platform.node():>32}"[:32])
+                encrypt = EncryptedString(key_value)
+                encrypted_pass_bytes = encrypt.encode(password.decode() if isinstance(password, bytes) else password)
                 return encrypted_pass_bytes, session_key
         raise OnePasswordForgottenPassword("You appear to have forgotten your password, visit: "
                                            "https://support.1password.com/forgot-master-password/")
 
     @staticmethod
     def _signin(
-        account: str = None,
-        domain: str = None,
-        email: str = None,
-        secret_key: str = None,
-        master_password: str = None
+        creds: OnePasswordCreds,
     ) -> tuple[Optional[bytes], Any, Optional[str], Optional[Union[str, Any]], Settings]:  # pragma: no cover
         """
         Re-sign-in to the CLI as required
@@ -146,39 +138,45 @@ class OnePassword:
         """
         bp = Settings()
         op_command = ""
-        if master_password is not None:
-            master_password = str.encode(master_password)
+        if creds.password is not None:
+            master_password_bytes = str.encode(creds.password)
         else:
             if 'op' in locals():
                 initiated_class = locals()["op"]
                 if 'session_key' and 'encrypted_master_password' in initiated_class.__dict__:
                     encrypt = EncryptedString(initiated_class.session_key)
-                    master_password = str.encode(encrypt.decode(initiated_class.encrypted_master_password))
+                    master_password_bytes = str.encode(encrypt.decode(initiated_class.encrypted_master_password))
             else:
                 with bp.open() as cache:
                     encryptor = EncryptedString(str(Settings.MASTER_PW_CACHE))
                     if Settings.MASTER_PW_KEY in cache:
                         encrypted_password = cache[Settings.MASTER_PW_KEY]
                         master_password = encryptor.decode(encrypted_password)
+                        master_password_bytes = str.encode(master_password)
                     else:
-                        master_password = str.encode(getpass("Please input your 1Password master password: "))
+                        master_password = getpass("Please input your 1Password master password: ")
                         encrypted_pass_bytes = encryptor.encode(master_password)
                         cache[Settings.MASTER_PW_KEY] = encrypted_pass_bytes
-        if secret_key:
-            op_command = f"op signin --account {domain} --raw"
+                        master_password_bytes = str.encode(master_password)
+        if creds.secret:
+            op_command = f"op signin --account {creds.account} --raw"
         else:
-            if account is None:
+            if creds.account is None:
                 try:
                     session_dict = bp.get_key_value("OP_SESSION", fuzzy=True)[0]  # list of dicts from BashProfile2
-                    account = list(session_dict.keys())[0].split('OP_SESSION_')[1]
+                    creds.account = list(session_dict.keys())[0].split('OP_SESSION_')[1]
                 except AttributeError:
-                    account = input("Please input your 1Password account name e.g. wandera from "
+                    creds.account = input("Please input your 1Password account name e.g. wandera from "
                                     "wandera.1password.com: ")
                 except ValueError:
                     raise ValueError("First signin failed or not executed.")
             op_command = "op signin --raw"
-        sess_key = _spawn_signin(op_command, master_password)
-        return master_password, sess_key, domain, account, bp
+
+        if creds.account is not None:
+            with bp.open() as cache:
+                cache[Settings.ACCOUNT_KEY] = creds.account
+        sess_key = _spawn_signin(op_command, master_password_bytes)
+        return master_password_bytes, sess_key, creds.domain, creds.account, bp
 
     def get_uuid(self, docname: str, vault: str = "Private") -> str:  # pragma: no cover
         """
