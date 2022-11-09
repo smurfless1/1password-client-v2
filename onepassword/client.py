@@ -132,7 +132,7 @@ class OnePassword:
         email: str = None,
         secret_key: str = None,
         master_password: str = None
-    ) -> tuple[bytes | None, Any, str | None, str | None | Any, Settings]:  # pragma: no cover
+    ) -> tuple[Optional[bytes], Any, Optional[str], Optional[Union[str, Any]], Settings]:  # pragma: no cover
         """
         Re-sign-in to the CLI as required
 
@@ -281,8 +281,8 @@ class OnePassword:
 
     @staticmethod
     def get_item_fields(
-            uuid: Union[str | bytes],
-            fields: Optional[Union[str | bytes | List[Union[str|bytes]]]] = None) -> dict:
+            uuid: Union[str, bytes],
+            fields: Optional[Union[str, bytes, Optional[List[Union[str, bytes]]]]] = None) -> dict:
         """
         Helper function to get a certain field, you can find the UUID you need using list_items
 
