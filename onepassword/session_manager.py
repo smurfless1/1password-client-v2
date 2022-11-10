@@ -1,6 +1,6 @@
 from getpass import getpass
 
-from onepassword import OnePasswordCreds
+from onepassword.creds import OnePasswordCreds
 from onepassword.exceptions import OnePasswordForgottenPassword
 from onepassword.utils import _spawn_signin, domain_from_email, read_bash_return
 
