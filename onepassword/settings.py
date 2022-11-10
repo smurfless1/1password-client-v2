@@ -9,7 +9,10 @@ class Settings:
     MASTER_PW_KEY = 'password'  # subtle. I like it.
     SESSION_KEY = 'OP_SESSION'
     DEVICE_KEY = 'OP_DEVICE'
-    ACCOUNT_KEY = 'ACCOUNT'
+    ACCOUNT_KEY = 'account'
+    DOMAIN_KEY = 'domain'
+    EMAIL_KEY = 'email'
+    SECRET_KEY = 'secret'
 
     @contextmanager
     def open(self) -> Iterable[dict]:

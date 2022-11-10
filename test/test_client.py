@@ -39,6 +39,23 @@ class FunctionalTest(unittest.TestCase):
             self.assertTrue(key in settings)
         self.assertEqual(out[0][key], expected)
 
+    def test_creds_to_file(self):
+        expected = 'this is a big password'
+        creds = OnePasswordCreds()
+        self.assertEqual(None, creds.password)
+        creds.password = expected
+        creds.secret = expected
+        creds.save()
+        self.assertEqual(expected, creds.password)
+        self.assertNotEqual(expected, creds.encrypted_password)
+        self.assertEqual(expected, creds.secret)
+        self.assertNotEqual(expected, creds.encrypted_secret)
+
+        creds2 = OnePasswordCreds()
+        creds2.load()
+        self.assertEqual(expected, creds2.password)
+        self.assertEqual(expected, creds2.secret)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,14 +1,20 @@
 import os
 import subprocess
-
 import pexpect
 
 master_password_regex = "Enter the password for [a-zA-Z0-9._%+-]+\\@[a-zA-Z0-9-]+\\.[a-zA-z]{2,4} at " \
                         "[a-zA-Z0-9-.]+\\.1password+\\.[a-zA-z]{2,4}"
 
 
-def read_bash_return(cmd, single=True):
-    result = subprocess.run(cmd, shell=True, check=False, capture_output=True)
+def read_bash_return(cmd, session_key_var: str, session_key: str, single=True):
+    my_env = os.environ.copy()
+    my_env[session_key_var] = session_key
+
+    result = subprocess.run(cmd,
+                            shell=True,
+                            check=False,
+                            env=my_env,
+                            capture_output=True)
     if single:
         return str(result.stdout.decode('utf-8').splitlines(False)[0])
     else:
