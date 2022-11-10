@@ -104,7 +104,10 @@ def generate_uuid():
 
     :return: (str)
     """
-    return read_bash_return("head -c 16 /dev/urandom | base32 | tr -d = | tr '[:upper:]' '[:lower:]'")
+    return read_bash_return(
+        "head -c 16 /dev/urandom | base32 | tr -d = | tr '[:upper:]' '[:lower:]'",
+        "", ""
+    )
 
 
 def get_device_uuid(bp):
