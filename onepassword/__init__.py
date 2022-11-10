@@ -1,2 +1,4 @@
-from .client import OnePassword, OnePasswordCreds
-__all__ = ["client", "exceptions", "OnePassword", "OnePasswordCreds", "utils"]
+from .creds import OnePasswordCreds
+from .client import OnePassword
+
+__all__ = ["client", "exceptions", "OnePassword", "utils"]

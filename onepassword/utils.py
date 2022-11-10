@@ -85,10 +85,9 @@ def bump_version(version_type="patch"):
         version = version_file.read().strip()
 
     all_version = version.replace('"', "").split(".")
-    if version_type == "patch":
-        new_all_version = version.split(".")[:-1]
-        new_all_version.append(str(int(all_version[-1]) + 1))
-    elif version_type == "minor":
+    new_all_version = version.split(".")[:-1]
+    new_all_version.append(str(int(all_version[-1]) + 1))
+    if version_type == "minor":
         new_all_version = [version.split(".")[0]]
         new_all_version.extend([str(int(all_version[1]) + 1), '0'])
     new_line = '.'.join(new_all_version) + "\n"
