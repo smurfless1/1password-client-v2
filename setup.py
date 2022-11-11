@@ -15,11 +15,11 @@ with (root_dir / 'VERSION').open('r', encoding='utf-8') as version_handle:
 
 
 setup(
-    name="1password",
+    name="onepassword",
     version=version,
-    author="David Pryce",
-    author_email="david.pryce@wandera.com",
-    description="A Python client and wrapper around the 1Password CLI.",
+    author="David Brown",
+    author_email="forums@smurfless.com",
+    description="A Python client and wrapper around the 1Password v2.x CLI.",
     long_description=readme(),
     long_description_content_type='text/markdown',
     install_requires=[
