@@ -1,8 +1,13 @@
 from getpass import getpass
+from typing import List
 
 from onepassword.creds import OnePasswordCreds
-from onepassword.exceptions import OnePasswordForgottenPassword
+from onepassword.decorators import retry
 from onepassword.utils import _spawn_signin, domain_from_email, read_bash_return
+
+
+class NotSignedInException(Exception):
+    """raise this if you are not signed in"""
 
 
 class SessionManager:
@@ -11,8 +16,7 @@ class SessionManager:
     def __init__(self):
         self.creds: OnePasswordCreds = OnePasswordCreds()
         self.creds.load()
-        if self.creds.session_key is None:
-            self.signin_wrapper()
+        self.sign_in_if_needed()
 
     def fill_creds(
         self,
@@ -27,6 +31,16 @@ class SessionManager:
         self.creds.password = self.creds.password or getpass("Please input your master password: ")
         self.creds.save()
 
+    def sign_in_if_needed(self):
+        if self.creds.session_key is None:
+            self.signin_wrapper()
+            return
+
+        vaults = self.list_vaults()
+        if not bool(vaults):
+            self.signin_wrapper()
+
+    @retry((NotSignedInException,), tries=3)
     def signin_wrapper(self):  # pragma: no cover
         """
         Tries to call op signin up to 3 times, allowing the user to update credentials if needed.
@@ -34,21 +48,10 @@ class SessionManager:
         :return: encrypted_str, session_key - used by signin to know of existing login
         """
         if self.creds.encrypted_password is None:
-            self.creds.load()
             self.fill_creds()
-        else:
-            self._signin()
-
-        tries = 1
-        while tries < 3:
-            if "are not currently signed in" in self.creds.session_key:
-                print("That's not the right password, try again.")
-                self._signin()
-                tries += 1
-                pass
-            return
-        raise OnePasswordForgottenPassword("You appear to have forgotten your password, visit: "
-                                           "https://support.1password.com/forgot-master-password/")
+        self._signin()
+        if "are not currently signed in" in self.creds.session_key:
+            raise NotSignedInException("Failed to sign in. Trying again.")
 
     def _signin(self):  # pragma: no cover
         """
@@ -71,3 +74,9 @@ class SessionManager:
             self.creds.session_key,
             single=single,
         )
+
+    def list_vaults(self) -> List[str]:
+        """Helper function to list all vaults"""
+        returned: List[str] = self.read_bash_return('op vault list').splitlines(keepends=False)
+        names = [line.split(maxsplit=1)[-1] for line in returned[1:]]
+        return names

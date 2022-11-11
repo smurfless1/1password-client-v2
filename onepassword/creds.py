@@ -60,6 +60,7 @@ class OnePasswordCreds:
             self.email = settings.get(Settings.EMAIL_KEY)
             self.encrypted_secret = settings.get(Settings.SECRET_KEY)
             self.encrypted_password = settings.get(Settings.MASTER_PW_KEY)
+            self.session_key = settings.get(Settings.SESSION_KEY)
 
     def save(self):
         setting_file = Settings()
@@ -69,3 +70,4 @@ class OnePasswordCreds:
             settings[Settings.EMAIL_KEY] = self.email
             settings[Settings.SECRET_KEY] = self.encrypted_secret
             settings[Settings.MASTER_PW_KEY] = self.encrypted_password
+            settings[Settings.SESSION_KEY] = self.session_key

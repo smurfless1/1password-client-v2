@@ -1,11 +1,25 @@
 import os
 import json
+from time import sleep
 from typing import Optional, List, Union, Dict
+from functools import partialmethod
 
+import pexpect
 import yaml
 from json import JSONDecodeError
 
 from onepassword.session_manager import SessionManager
+from onepassword.utils import limited_bash_return
+
+
+class FieldType:
+    PASSWORD = 'password'
+    TEXT = 'text'
+
+
+class DefaultFields:
+    PASSWORD = 'password'
+    USERNAME = 'username'
 
 
 class OnePassword(SessionManager):
@@ -59,6 +73,19 @@ class OnePassword(SessionManager):
             self._signin()
             self.read_bash_return(cmd)
 
+    def delete_item(self, uuid: str, vault: str = "Private"):  # pragma: no cover
+        """
+        Helper function to delete an item
+
+        :param uuid: uuid of the item you wish to remove
+        :param vault: vault the document is in (optional, default=Private)
+        """
+        cmd = f"op item delete \"{uuid}\" --vault='{vault}'"
+        response = self.read_bash_return(cmd)
+        if len(response) > 0:
+            self._signin()
+            self.read_bash_return(cmd)
+
     def delete_document(self, title: str, vault: str = "Private"):  # pragma: no cover
         """
         Helper function to delete a document
@@ -90,12 +117,6 @@ class OnePassword(SessionManager):
         # remove the saved file locally
         os.remove(filename)
 
-    def list_vaults(self) -> List[str]:
-        """Helper function to list all vaults"""
-        returned: List[str] = self.read_bash_return('op vault list').splitlines(keepends=False)
-        names = [line.split(maxsplit=1)[-1] for line in returned[1:]]
-        return names
-
     def list_items(self, vault: str = "Private") -> dict:
         """
         Helper function to list all items in a certain vault
@@ -104,7 +125,7 @@ class OnePassword(SessionManager):
 
         :returns: dict of all items
         """
-        self.signin_wrapper()
+        self.sign_in_if_needed()
         items = json.loads(self.read_bash_return(
             f"op item list --format=json --vault='{vault}'"))
         return items
@@ -122,18 +143,43 @@ class OnePassword(SessionManager):
         (optional, default=None which means all fields returned)
         :return: dict of the item with requested fields
         """
-        self.signin_wrapper()
+        self.sign_in_if_needed()
         if isinstance(fields, list):
             returned = self.read_bash_return(
                 f"op item get \"{uuid}\" --format=json --fields {','.join(fields)}"
             )
+            if "isn't an item" in returned:
+                return {}
             items: List[Dict] = json.loads(returned)
             item = {elt.get('id'): elt.get('value') for elt in items}
         elif isinstance(fields, str):
-            item = {fields: self.read_bash_return(f"op item get \"{uuid}\" --fields {fields}").strip()}
+            returned = self.read_bash_return(f"op item get \"{uuid}\" --fields {fields}").strip()
+            if "isn't an item" in returned:
+                return {}
+            item = {fields: returned}
         else:
-            item = json.loads(self.read_bash_return(f"op item get \"{uuid}\" --format=json"))
+            returned = self.read_bash_return(f"op item get \"{uuid}\" --format=json")
+            if "isn't an item" in returned:
+                return {}
+            item = json.loads(returned)
         return item
+
+    def edit_item_field(
+        self,
+        fieldtype: str,
+        uuid: str,
+        field: str,
+        value: str,
+    ):
+        """op item edit 'Test Password' username='fake.for.testing@smurfless.com'"""
+        self.sign_in_if_needed()
+        # more types?
+        formatted = field if field in [DefaultFields.USERNAME, DefaultFields.PASSWORD] else f"{field}[{fieldtype}]"
+        cmd = f"op item edit \"{uuid}\" \"{formatted}={value}\""
+        self.read_bash_return(cmd)
+
+    edit_item_username = partialmethod(edit_item_field, fieldtype=FieldType.TEXT, field=DefaultFields.USERNAME)
+    edit_item_password = partialmethod(edit_item_field, fieldtype=FieldType.PASSWORD, field=DefaultFields.PASSWORD)
 
     def create_login(
         self,
@@ -149,17 +195,29 @@ class OnePassword(SessionManager):
         :param title: title you wish to call the login
         :param vault: vault the document is in (optional, default=Private)
         """
-        self.signin_wrapper()
-        cmd = f"op item create --category login username={username} password={password} --title={title} --vault={vault}"
-        # [--tags=<tags>]
-        response = self.read_bash_return(cmd)
-        if len(response) == 0:
-            self._signin()
-            self.read_bash_return(cmd)
+        self.sign_in_if_needed()
+        op_command = f'op item create --category=login "username={username}" "password={password}" --title="{title}" --vault="{vault}"'
+        try:
+            # there is a rather serious bug in 1password CLI v2 that locks up with the normal subprocess calls
+            # yes they are aware, no their fix didn't work.
+            response = self.read_bash_return(op_command)
+            if 'ERROR' in response or len(response) == 0:
+                raise ValueError("1Password reported an error creating an item from the CLI.")
+            return
+        except:
+            # however, THIS works fine. Just not on Windows.
+            command = f'bash -c \'{self.creds.session_key_name}={self.creds.session_key} {op_command}\''
+            my_env = os.environ.copy()
+            my_env[self.creds.session_key_name] = self.creds.session_key
+            child = pexpect.spawn(command, env=my_env)
+            sleep(7)
+            child.close()
+            # stupidly it also takes a second or two to settle
+            sleep(2)
 
     def create_device(self, filename: str, category: str, vault: str = "Private"):  # pragma: no cover
         """untested, from a fork: merkelste"""
-        self.signin_wrapper()
+        self.sign_in_if_needed()
         cmd = f'op item create --category device "{category}" "$(op encode < {filename})" --vault={vault}'
         response = self.read_bash_return(cmd)
         if len(response) == 0:

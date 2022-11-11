@@ -1,6 +1,7 @@
 import unittest
 
 from onepassword import OnePassword, OnePasswordCreds
+from onepassword.client import FieldType
 from onepassword.settings import Settings
 
 
@@ -21,6 +22,8 @@ class FunctionalTest(unittest.TestCase):
         op = OnePassword()
         field_name = 'password'
         field_names = ['username', 'password']
+        response = op.get_item_fields('no such item', field_name)
+        self.assertFalse(bool(response))
         response = op.get_item_fields('Test Password', field_name)
         self.assertTrue(bool(response))
         self.assertEqual('what a terrible password', response[field_name])
@@ -28,6 +31,23 @@ class FunctionalTest(unittest.TestCase):
         self.assertTrue(bool(response))
         self.assertEqual('fake.for.testing@smurfless.com', response['username'])
         self.assertEqual('what a terrible password', response['password'])
+
+    def test_creates_and_edits_items(self):
+        """For keyring compliance, we can create, update, and get passwords."""
+        op = OnePassword()
+        item_name = 'Ignore'
+        username = 'foo'
+        password = 'bar'
+        vault_name = 'Personal'
+        op.create_login(username=username, password=password, title=item_name, vault=vault_name)
+        response = op.get_item_fields(item_name, 'username')
+        self.assertTrue(response['username'] in ['foo', 'biz'])
+        op.edit_item_username(uuid=item_name, value='biz')
+        response = op.get_item_fields(item_name, 'username')
+        self.assertEqual('biz', response['username'])
+        op.delete_item(item_name, vault=vault_name)
+        response = op.get_item_fields(item_name, 'username')
+        self.assertFalse(response)
 
     def test_settings(self):
         bp = Settings()

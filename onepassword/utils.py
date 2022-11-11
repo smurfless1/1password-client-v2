@@ -1,24 +1,54 @@
 import os
 import subprocess
+import shlex
+
 import pexpect
 
 master_password_regex = "Enter the password for [a-zA-Z0-9._%+-]+\\@[a-zA-Z0-9-]+\\.[a-zA-z]{2,4} at " \
                         "[a-zA-Z0-9-.]+\\.1password+\\.[a-zA-z]{2,4}"
 
 
-def read_bash_return(cmd, session_key_var: str, session_key: str, single=True):
+def read_bash_return(cmd, session_key_var: str, session_key: str, single=True) -> str:
     my_env = os.environ.copy()
     my_env[session_key_var] = session_key
 
-    result = subprocess.run(cmd,
-                            shell=True,
-                            check=False,
-                            env=my_env,
-                            capture_output=True)
-    if single:
-        return str(result.stdout.decode('utf-8').splitlines(False)[0])
-    else:
-        return str(result.stdout.decode('utf-8'))
+    try:
+        result = subprocess.run(cmd,
+                                shell=True,
+                                check=False,
+                                env=my_env,
+                                capture_output=True,
+                                timeout=5,
+                                input='',
+                                )
+        combined = str(result.stdout.decode('utf-8')) + str(result.stderr.decode('utf-8'))
+        if single:
+            return combined.splitlines(False)[0]
+        else:
+            return combined
+
+    except subprocess.TimeoutExpired as tee:
+        print(tee)
+
+
+def limited_bash_return(cmd, session_key_var: str, session_key: str, single=True) -> str:
+    my_env = os.environ.copy()
+    my_env[session_key_var] = session_key
+
+    try:
+        result = subprocess.run(shlex.split(cmd),
+                                check=False,
+                                env=my_env,
+                                timeout=5,
+                                )
+        #combined = str(result.stdout.decode('utf-8')) + str(result.stderr.decode('utf-8'))
+        #if single:
+        #    return combined.splitlines(False)[0]
+        #else:
+        #    return combined
+
+    except subprocess.TimeoutExpired as tee:
+        print(tee)
 
 
 def domain_from_email(address):
