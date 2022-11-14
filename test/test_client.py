@@ -1,7 +1,6 @@
 import unittest
 
 from onepassword import OnePassword, OnePasswordCreds
-from onepassword.client import FieldType
 from onepassword.settings import Settings
 
 
