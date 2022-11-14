@@ -1,4 +1,5 @@
 import unittest
+from typing import Dict
 
 from onepassword import OnePassword, OnePasswordCreds
 from onepassword.settings import Settings
@@ -74,6 +75,22 @@ class FunctionalTest(unittest.TestCase):
         creds2.load()
         self.assertEqual(expected, creds2.password)
         self.assertEqual(expected, creds2.secret)
+
+    def test_finds_multiples_with_same_title(self):
+        item_name = 'Airbnb'
+        op = OnePassword()
+        matches: Dict[str, str] = op.get_uuids(item_name)
+        self.assertEqual(2, len(matches))
+        for match in matches.keys():
+            fields = op.get_item_fields(match, None)
+            # note for future self: this ID only appears when you do not filter by fields
+            self.assertEqual(match, fields.get('id'))
+
+    def test_finds_first_uuid_with_hint(self):
+        item_name = 'Airbnb'
+        op = OnePassword()
+        found = op.get_first_uuid_with_hint(title=item_name, hint='business')
+        self.assertEqual('wyw75vvg6jgmzk5es264hqftyu', found)
 
 
 if __name__ == '__main__':
