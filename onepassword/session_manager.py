@@ -1,9 +1,11 @@
 from getpass import getpass
 from typing import List
 
+import pexpect
+
 from onepassword.creds import OnePasswordCreds
 from onepassword.decorators import retry
-from onepassword.utils import _spawn_signin, domain_from_email, read_bash_return
+from onepassword.utils import domain_from_email, read_bash_return
 
 
 class NotSignedInException(Exception):
@@ -63,7 +65,7 @@ class SessionManager:
         op_command = "op signin --raw"
         if self.creds.account is not None:
             op_command = f"op signin --account {self.creds.account} --raw"
-        self.creds.session_key = _spawn_signin(op_command, str.encode(self.creds.password))
+        self.creds.session_key = self._spawn_signin(op_command, str.encode(self.creds.password))
         self.creds.save()
 
     def read_bash_return(self, cmd, single=False) -> str:
@@ -80,3 +82,75 @@ class SessionManager:
         returned: List[str] = self.read_bash_return('op vault list').splitlines(keepends=False)
         names = [line.split(maxsplit=1)[-1] for line in returned[1:]]
         return names
+
+    def add_account_to_cli(self):
+        """op account add
+
+Enter your sign-in address (example.1password.com):
+Enter the email address for your account on smurfless.1password.com:
+Enter the Secret Key for business@smurfless.com on smurfless.1password.com:
+Enter the password for business@smurfless.com at smurfless.1password.com:
+Now run 'eval $(op signin)' to sign in.
+        """
+        self.fill_creds()
+        child = pexpect.spawn('op account add')
+        child.expect('Enter your sign-in address .*: ')
+        child.sendline(self.creds.domain)
+        child.expect(f'Enter the email address for your account on {self.creds.domain}: ')
+        child.sendline(self.creds.email)
+        child.expect(f'Enter the Secret Key for {self.creds.email} on {self.creds.domain}: ')
+        child.sendline(self.creds.secret)
+        child.expect(f'Enter the password for {self.creds.email} at {self.creds.domain}: ')
+        child.sendline(self.creds.password)
+        child.expect("Now run '.*' to sign in.")
+
+    def _spawn_signin(self, command, m_password: bytes) -> str:
+        if command == "":
+            raise IOError("Spawn command not valid")
+        child = pexpect.spawn(command)
+        resp = child.expect([no_accounts_configured, pexpect.EOF])
+        if resp == 0:
+            child.close()
+            self.add_account_to_cli()
+            child = pexpect.spawn(command)
+
+        resp = child.expect([master_password_regex, pexpect.EOF])
+        if resp != 1:
+            if child.isalive():
+                try:
+                    child.sendline(m_password)
+                except OSError:
+                    child.close()
+                    child = pexpect.spawn(command)
+                    child.expect([master_password_regex, pexpect.EOF])
+                    child.sendline(m_password)
+            else:
+                child.close()
+                child = pexpect.spawn(command)
+                resp = child.expect([master_password_regex, pexpect.EOF])
+                if resp == 0:
+                    child.sendline(m_password)
+        resp = child.expect(['Enter your six-digit authentication code:', pexpect.EOF])
+        if resp != 1:
+            auth_code = str(input("Please input your 1Password six-digit authentication code: "))
+            child.sendline(auth_code)
+            child.expect(pexpect.EOF)
+        before = child.before
+        child.close()
+        if before:
+            sess_key = get_session_key(child.before)
+            return sess_key
+        return ''
+
+
+master_password_regex = "Enter the password for [a-zA-Z0-9._%+-]+\\@[a-zA-Z0-9-]+\\.[a-zA-z]{2,4} at " \
+                        "[a-zA-Z0-9-.]+\\.1password+\\.[a-zA-z]{2,4}"
+no_accounts_configured = "Do you want to add an account manually"
+
+
+def get_session_key(process_resp_before: bytes) -> str:
+    new_line_response = [x for x in str(process_resp_before).split(" ") if "\\r\\n" in x]
+    if len(new_line_response) != 1:
+        raise IndexError("Session keys not parsed correctly from response: {}.".format(process_resp_before))
+    else:
+        return new_line_response[0].split("\\r\\n")[1][:-1]

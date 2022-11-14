@@ -9,7 +9,6 @@ import yaml
 from json import JSONDecodeError
 
 from onepassword.session_manager import SessionManager
-from onepassword.utils import limited_bash_return
 
 
 class FieldType:
