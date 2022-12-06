@@ -15,7 +15,7 @@ install_requires = \
 
 setup_kwargs = {
     'name': 'onepassword',
-    'version': '2.0.2',
+    'version': '2.0.3',
     'description': 'CLI wrapper for 1Password v2',
     'long_description': 'None',
     'author': 'David Brown',
