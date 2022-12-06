@@ -2,6 +2,7 @@ from getpass import getpass
 from typing import List
 
 import pexpect
+from pexpect import TIMEOUT
 
 from onepassword.creds import OnePasswordCreds
 from onepassword.decorators import retry
@@ -108,7 +109,7 @@ Now run 'eval $(op signin)' to sign in.
         if command == "":
             raise IOError("Spawn command not valid")
         child = pexpect.spawn(command)
-        resp = child.expect([no_accounts_configured, pexpect.EOF])
+        resp = child.expect([no_accounts_configured, pexpect.EOF, TIMEOUT], timeout=4.0)
         if resp == 0:
             child.close()
             self.add_account_to_cli()
@@ -143,8 +144,7 @@ Now run 'eval $(op signin)' to sign in.
         return ''
 
 
-master_password_regex = "Enter the password for [a-zA-Z0-9._%+-]+\\@[a-zA-Z0-9-]+\\.[a-zA-z]{2,4} at " \
-                        "[a-zA-Z0-9-.]+\\.1password+\\.[a-zA-z]{2,4}"
+master_password_regex = "Enter the password for .* at .*"
 no_accounts_configured = "Do you want to add an account manually"
 
 
