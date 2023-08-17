@@ -1,5 +1,6 @@
 from getpass import getpass
 from typing import List
+from pathlib import Path
 
 import pexpect
 from pexpect import TIMEOUT
@@ -139,8 +140,13 @@ Now run 'eval $(op signin)' to sign in.
         before = child.before
         child.close()
         if before:
-            sess_key = get_session_key(child.before)
-            return sess_key
+            try:
+                sess_key = get_session_key(child.before)
+                return sess_key
+            except (ValueError,IndexError):
+                settingsfile = Path('~/.onepassword.pkl.db').expanduser()
+                if settingsfile.exists():
+                    settingsfile.unlink()
         return ''
 
 
